@@ -1,0 +1,2 @@
+# OSCAR_P01_FLasherLoader
+Boot program for the OSCAR platform (P01 processor board), combining a bootloader and a flasher client. It allows storing ELF files of effect programs, along with their dependencies (fonts, images, etc.), into the onboard flash memory. The system also provides a selection mechanism to choose which effect to run. At power-up, the bootloader automatically launches the selected effect.
