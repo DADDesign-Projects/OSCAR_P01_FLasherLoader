@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+/Debug
+/Release
+OSCAR_P01_FLasherLoader Debug.launch
+/.settings
