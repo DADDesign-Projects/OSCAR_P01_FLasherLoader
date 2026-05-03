@@ -177,56 +177,149 @@ extern "C" void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 //
 static void loadRegionsAndJump(const char *pName){
 
-	// Retrieves information about the file regions (segments) from the storage
-	DadPersistentStorage::sRegionInfo* pRegion;
-	uint32_t nbRegions;
-	uint8_t* FilePtr;
-	if(false ==__FlasherStorage.GetElfRegionsInformation(pName, FilePtr, pRegion, nbRegions)){
-		while(1);
-		// Error handling: Enters infinite loop if ELF parsing fails
-	}
+    DadPersistentStorage::sRegionInfo* pRegion;
+    uint32_t nbRegions;
+    uint8_t* FilePtr;
 
-	//HAL_TIM_Base_Stop_IT(&htim6);
+    if(false == __FlasherStorage.GetElfRegionsInformation(pName, FilePtr, pRegion, nbRegions)){
+        while(1);
+    }
 
-	// Copies the loaded regions into memory
-	for(uint32_t i = 0; i < nbRegions; i++){
-		// Skips regions that are located above the writable address (likely reserved for bootloader/system)
-		if (pRegion->dest_addr >= (uint8_t *) 0x38010000) {
-		    continue;
-		}
-		// If there is data to copy
-		if(pRegion->copy_size > 0){
-		    // Checks if the data needs to be moved (source differs from destination)
-		    if(pRegion->source_addr != pRegion->dest_addr){
-		        // Copies data from the file pointer offset to the source address
-		        memcpy(pRegion->source_addr, FilePtr + pRegion->file_offset, pRegion->copy_size);
-		    } else {
-		        // Copies data directly to the destination address (usually RAM)
-		        memcpy(pRegion->dest_addr, FilePtr + pRegion->file_offset, pRegion->copy_size);
-		    }
-		}
-		// If there is memory to zero out
-		if(pRegion->zero_size > 0){
-			// Zeros out the memory area after the copied data
-			memset(pRegion->dest_addr + pRegion->copy_size, 0, pRegion->zero_size);
-		}
-		pRegion++;
-	}
+    // Save the 3 C parameters into D3 scratch SRAM before entering
+    // the register-constrained asm block — avoids GCC "impossible constraints"
+    // D3 scratch layout (16 bytes at 0x38001000):
+    //   +0x00 : pRegion   (base pointer to region array)
+    //   +0x04 : nbRegions (total region count)
+    //   +0x08 : FilePtr   (base address of ELF file in storage)
+    //   +0x0C : i         (loop index, initialized to 0)
+    volatile uint32_t* pD3 = (volatile uint32_t*)0x38001000;
+    pD3[0] = (uint32_t)pRegion;
+    pD3[1] = (uint32_t)nbRegions;
+    pD3[2] = (uint32_t)FilePtr;
+    pD3[3] = 0;  // i = 0
 
-	// Writes the magic word to signal readiness
-	// To inform the startup code that it should jump to the application
-	uint32_t * pMagic;
-	pMagic = (uint32_t *)0x38000000;
-	*pMagic = 0xBAD02850;
+    // From this point: pure assembly, no stack/heap usage
+    // All working variables are read from D3 scratch only
+    __asm volatile (
 
-	// Reset
-	// Triggers a system reset
-	NVIC_SystemReset();
+		/* ── 1. Disable all interrupts before the copy loop ────────────── */
+		"CPSID   IF                        \n" // Set PRIMASK=1 and FAULTMASK=1
 
-	// This code block should never be reached
-	while(1);
+		/* Also disable SysTick to prevent any timer preemption */
+		"LDR     r4,  =0xE000E010          \n" // SysTick->CTRL address
+		"LDR     r5,  [r4]                 \n"
+		"BIC     r5,  r5,  #1              \n" // Clear ENABLE bit
+		"STR     r5,  [r4]                 \n"
+
+		/* ── 2. Main region loop ────────────────────────────────────────── */
+	"loop_start:                           \n"
+		"LDR     r4,  =0x38001000          \n" // r4 = D3 scratch base
+		"LDR     r0,  [r4, #12]            \n" // r0 = i
+		"LDR     r1,  [r4, #4]             \n" // r1 = nbRegions
+		"CMP     r0,  r1                   \n"
+		"BGE     loop_end                  \n" // i >= nbRegions → exit loop
+
+		/* Compute pointer to current region: base + i * sizeof(sRegionInfo) */
+		/* sizeof(sRegionInfo) = 5 * 4 = 20 bytes                            */
+		"LDR     r2,  [r4, #0]             \n" // r2 = pRegion base
+		"MOV     r3,  #20                  \n" // sizeof(sRegionInfo)
+		"MLA     r2,  r0, r3, r2           \n" // r2 = &pRegion[i]
+
+		/* Load sRegionInfo fields individually (r7 never used) */
+		"LDR     r5,  [r2, #0]             \n" // r5  = file_offset
+		"LDR     r6,  [r2, #4]             \n" // r6  = dest_addr
+		"LDR     r10, [r2, #8]             \n" // r10 = source_addr
+		"LDR     r11, [r2, #12]            \n" // r11 = copy_size
+		"LDR     r12, [r2, #16]            \n" // r12 = zero_size
+
+		/* ── 2a. Skip regions at or above 0x38010000 (bootloader reserved) */
+		"LDR     r3,  =0x38010000          \n"
+		"CMP     r6,  r3                   \n" // compare dest_addr
+		"BGE     loop_next                 \n" // dest_addr >= limit → skip
+
+		/* ── 2b. Copy phase (copy_size > 0) ────────────────────────────── */
+		"CMP     r11, #0                   \n" // CBZ only works on r0-r7,
+		"BEQ     skip_copy                 \n" // so use CMP+BEQ for r11
+
+		/* Select effective destination:
+		   if source_addr != dest_addr → copy to source_addr
+		   if source_addr == dest_addr → copy to dest_addr   */
+		"CMP     r10, r6                   \n"
+		"ITE     NE                        \n"
+		"MOVNE   r3,  r10                  \n" // effective dest = source_addr
+		"MOVEQ   r3,  r6                   \n" // effective dest = dest_addr
+
+		/* Source in file: FilePtr + file_offset */
+		"LDR     r0,  [r4, #8]             \n" // FilePtr from D3 scratch
+		"ADD     r0,  r0,  r5              \n" // r0 = FilePtr + file_offset
+
+		/* Byte-by-byte copy — no stack dependency, safe across RAM regions */
+		/* r3 = dst, r0 = src, r11 = byte count                             */
+	"copy_loop:                            \n"
+		"CMP     r11, #0                   \n"
+		"BEQ     skip_copy                 \n"
+		"LDRB    r5,  [r0],  #1            \n" // load byte from source, post-increment
+		"STRB    r5,  [r3],  #1            \n" // store byte to dest,   post-increment
+		"SUBS    r11, r11,  #1             \n"
+		"B       copy_loop                 \n"
+
+	"skip_copy:                            \n"
+		/* Reload struct pointer and fields after copy loop consumed registers */
+		"LDR     r4,  =0x38001000          \n"
+		"LDR     r1,  [r4, #12]            \n" // i
+		"LDR     r2,  [r4, #0]             \n" // pRegion base
+		"MOV     r3,  #20                  \n"
+		"MLA     r2,  r1, r3, r2           \n" // r2 = &pRegion[i] again
+		"LDR     r6,  [r2, #4]             \n" // r6  = dest_addr
+		"LDR     r11, [r2, #12]            \n" // r11 = copy_size
+		"LDR     r12, [r2, #16]            \n" // r12 = zero_size
+
+		/* ── 2c. Zero phase (zero_size > 0) ────────────────────────────── */
+		"CMP     r12, #0                   \n" // CBZ only works on r0-r7,
+		"BEQ     loop_next                 \n" // so use CMP+BEQ for r12
+
+		/* Zero area starts at: dest_addr + copy_size */
+		"ADD     r3,  r6,  r11             \n" // r3 = dest_addr + copy_size
+		"MOV     r0,  #0                   \n"
+	"zero_loop:                            \n"
+		"CMP     r12, #0                   \n"
+		"BEQ     loop_next                 \n"
+		"STRB    r0,  [r3],  #1            \n" // write zero byte, post-increment
+		"SUBS    r12, r12,  #1             \n"
+		"B       zero_loop                 \n"
+
+	"loop_next:                            \n"
+		/* Increment loop index i in D3 scratch */
+		"LDR     r4,  =0x38001000          \n"
+		"LDR     r0,  [r4, #12]            \n"
+		"ADD     r0,  r0,  #1              \n"
+		"STR     r0,  [r4, #12]            \n"
+		"B       loop_start                \n"
+
+		/* ── 3. Write magic word to D3 base to signal readiness ─────────── */
+	"loop_end:                             \n"
+		"LDR     r4,  =0x38000000          \n"
+		"LDR     r5,  =0xBAD02850          \n"
+		"STR     r5,  [r4]                 \n" // *0x38000000 = 0xBAD02850
+
+		/* ── 4. Memory and instruction barriers before reset ────────────── */
+		"DSB                               \n" // ensure all writes are committed
+		"ISB                               \n" // flush instruction pipeline
+
+		/* ── 5. System reset via SCB->AIRCR (NVIC_SystemReset equivalent) ─ */
+		"LDR     r4,  =0xE000ED0C          \n" // SCB->AIRCR
+		"LDR     r5,  =0x05FA0004          \n" // VECTKEY | SYSRESETREQ
+		"STR     r5,  [r4]                 \n"
+
+		/* Should never be reached */
+	"spin:                                 \n"
+		"B       spin                      \n"
+
+		:                                      // no outputs
+		:                                      // no inputs — everything via D3 scratch
+		: "r0","r1","r2","r3","r4","r5","r6","r10","r11","r12","memory","cc"
+	);
 }
-
 // ===================================================================
 // Description : Scan the storage directory to identify all ELF files
 //               and build an index table of available executable files.
