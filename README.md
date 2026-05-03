@@ -22,7 +22,7 @@ At power-up, the bootloader automatically runs the selected effect.
 ### Clone the repository
 
 ```bash
-git clone --recurse-submodules https://github.com/DADDesign-Projects/OSCAR_P01_FLasherLoader
+git clone --recurse-submodules https://github.com/DADDesign-Projects/OSCAR_P01_FLasher_Loader
 ```
 
 ## 🛠️ Build
