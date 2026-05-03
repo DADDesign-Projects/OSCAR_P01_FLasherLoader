@@ -37,7 +37,7 @@ void cFlasherClient::Initialize(uint8_t *FlasherZoneAddr){
     m_Msg.StartMarker[0] = 'B';
     m_Msg.StartMarker[1] = 'L';
     m_Msg.StartMarker[2] = 'O';
-    m_Msg.StartMarker[3] = 'C';
+    m_Msg.StartMarker[3] = 'K';
     m_Msg.NumBloc = 0;
     m_TotalMemoryTransfered = 0;
     m_State = FlasherClientState::Reset;
@@ -99,7 +99,7 @@ bool cFlasherClient::BlocProcess(uint16_t NumBloc){
 	if((pBloc->StartMarker[0] != 'B') ||
 	   (pBloc->StartMarker[1] != 'L') ||
 	   (pBloc->StartMarker[2] != 'O') ||
-	   (pBloc->StartMarker[3] != 'C') ||
+	   (pBloc->StartMarker[3] != 'K') ||
 	   (pBloc->EndMarker[0] != 'E') ||
 	   (pBloc->EndMarker[1] != 'N') ||
 	   (pBloc->EndMarker[2] != 'D') ||
