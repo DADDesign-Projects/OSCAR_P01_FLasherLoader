@@ -22,7 +22,7 @@ At power-up, the bootloader automatically runs the selected effect.
 ### Clone the repository
 
 ```bash
-git clone --recurse-submodules https://github.com/DADDesign-Projects/OSCAR_P01_FLasher_Loader
+git clone --recurse-submodules https://github.com/DADDesign-Projects/OSCAR_P01_FLasherLoader
 ```
 
 ## 🛠️ Build
@@ -70,7 +70,7 @@ The selected effect will be automatically launched at next power-up.
 
 The Flasher Server source code is available here:
 
-https://github.com/DADDesign-Projects/OSCAR_FLasherServer
+https://github.com/DADDesign-Projects/OSCAR_FLasher_Server
 
 ## 📄 License
 
