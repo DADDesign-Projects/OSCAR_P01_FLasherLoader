@@ -24,7 +24,7 @@
 
 #include <stdint.h>
 #include "Sections.h"
-#include "FlashDefine.h"
+#include "PersistentDefine.h"
 #include "cFlasherStorage.h"
 
 // -------------------------------------------------------------------

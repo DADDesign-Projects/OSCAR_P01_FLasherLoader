@@ -18,8 +18,8 @@
 constexpr uint32_t NbPagesFlasher = FLASHER_MEM_SIZE / QFLAH_SECTOR_SIZE;
 typedef uint8_t Page[QFLAH_SECTOR_SIZE];
 
-#define TAILLE_BLOC_TRANS    1024               // Size of a single transmission block in bytes
-#define NB_BLOC_TRANS        8                  // Number of transmission blocks per QSPI page
+#define TAILLE_BLOC_TRANS    1024               					// Size of a single transmission block in bytes
+constexpr uint32_t NB_BLOC_TRANS = QFLAH_SECTOR_SIZE/TAILLE_BLOC_TRANS; 	// Number of transmission blocks per QSPI page
 
 constexpr uint32_t VAL_MS_TIMEOUT= 1000;        // Timeout value for block reception 1 second
 

@@ -109,12 +109,12 @@ void MX_TIM6_Init(void);
 #define LED_GPIO_Port GPIOG
 #define FootSwitch2B_Pin GPIO_PIN_12
 #define FootSwitch2B_GPIO_Port GPIOG
-#define FootSwitch2A_Pin GPIO_PIN_5
-#define FootSwitch2A_GPIO_Port GPIOB
+#define FootSwitch2_Pin GPIO_PIN_5
+#define FootSwitch2_GPIO_Port GPIOB
 #define FootSwitch1B_Pin GPIO_PIN_6
 #define FootSwitch1B_GPIO_Port GPIOB
-#define FootSwitch1A_Pin GPIO_PIN_7
-#define FootSwitch1A_GPIO_Port GPIOB
+#define FootSwitch1_Pin GPIO_PIN_7
+#define FootSwitch1_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
