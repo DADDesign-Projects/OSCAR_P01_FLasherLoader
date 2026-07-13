@@ -72,6 +72,8 @@ The Flasher Server source code is available here:
 
 https://github.com/DADDesign-Projects/OSCAR_FLasher_Server
 
+Python version https://github.com/DADDesign-Projects/OSCAR_PY_FLasher_Server
+
 ## 📄 License
 
 This project is licensed under the **Apache License 2.0**.
