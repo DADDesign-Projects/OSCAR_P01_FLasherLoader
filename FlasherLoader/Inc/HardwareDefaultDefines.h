@@ -20,14 +20,6 @@
 #define GENERAL_UPDATE_MS  100     // General system update interval in milliseconds
 
 //**********************************************************************************
-// Daisy Seed Revision
-//**********************************************************************************
-enum class eHardRev_t{
-	Rev5,
-	Rev7
-};
-
-//**********************************************************************************
 // DryWet Parameter
 //**********************************************************************************
 constexpr float MIN_DRY = -45.0f;  // Minimum dry signal level cDryWet
