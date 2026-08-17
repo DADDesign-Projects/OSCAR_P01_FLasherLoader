@@ -1,0 +1,16 @@
+[project]
+name = "oscar-flasher-server"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "pillow>=12.2.0",
+    "pyelftools>=0.33",
+    "pyserial>=3.5",
+]
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.20.0",
+]
